@@ -280,6 +280,117 @@ const persisted = await page.evaluate(() => {
 })
 check('the graph survives a reload', persisted.hasMeringue && persisted.nodes > 5, JSON.stringify(persisted))
 
+/* ------------------------------------------------------------- export -- */
+
+const exported = await page.evaluate(async () => {
+  const { buildExport } = await import('/src/data/export.ts')
+  const s = window.skillTree.getState()
+  const file = buildExport(s.graph, s.user)
+  const round = JSON.parse(JSON.stringify(file))
+  return {
+    format: round.format,
+    nodes: round.nodes.length,
+    // A soft-deleted node must be in the export, or it cannot restore.
+    includesDeleted: round.nodes.some((n) => n.deletedAt !== null) || Object.values(s.graph.nodes).every((n) => !n.deletedAt),
+    hasPrefs: Boolean(round.preferences),
+    hasEntries: Array.isArray(round.entries),
+  }
+})
+check(
+  'export is complete and round-trips as JSON',
+  exported.format === 'skill-tree/v1' && exported.nodes > 0 && exported.hasPrefs && exported.hasEntries && exported.includesDeleted,
+  JSON.stringify(exported),
+)
+
+/* --------------------------------------------------------- dark mode -- */
+
+await page.evaluate(() => window.skillTree.getState().setPrefs({ theme: 'dark' }))
+await page.waitForTimeout(500)
+
+// Computed styles come back as literal oklch() strings, so read L directly.
+const lightnessProbe = () =>
+  page.evaluate(() => {
+    const L = (css) => {
+      const m = /oklch\(\s*([\d.]+)/.exec(css)
+      return m ? Number(m[1]) : null
+    }
+    const s = window.skillTree.getState()
+    const lightnessOf = (id) => {
+      const el = document.querySelector(`.node[data-id="${id}"] .node-tile`)
+      return el ? L(getComputedStyle(el).backgroundColor) : null
+    }
+    // Compare a root against the deepest node under it, which is where the
+    // ramp's direction actually shows.
+    const rootId = s.index.rootIds.find((r) => s.index.maxDepthOfRoot[r] > 0)
+    const deepest = s.index.live
+      .filter((n) => s.index.rootIdOf[n.id] === rootId && n.state !== 'planned')
+      .sort((a, b) => s.index.depth[b.id] - s.index.depth[a.id])[0]
+    const tiles = [...document.querySelectorAll('.node:not([data-planned]) .node-tile')]
+      .map((t) => L(getComputedStyle(t).backgroundColor))
+      .filter((l) => l !== null)
+    return {
+      theme: document.documentElement.dataset.theme,
+      canvas: L(getComputedStyle(document.querySelector('.canvas')).backgroundColor),
+      root: lightnessOf(rootId),
+      leaf: deepest ? lightnessOf(deepest.id) : null,
+      min: Math.min(...tiles),
+      max: Math.max(...tiles),
+      count: tiles.length,
+    }
+  })
+
+const dark = await lightnessProbe()
+check(
+  'dark mode lifts the whole ramp clear of the canvas',
+  dark.theme === 'dark' && dark.count > 1 && dark.min > dark.canvas + 0.2,
+  JSON.stringify(dark),
+)
+check('dark mode runs light root -> darker leaf', dark.root > dark.leaf, `root ${dark.root} > leaf ${dark.leaf}`)
+
+await page.evaluate(() => window.skillTree.getState().setPrefs({ theme: 'light' }))
+await page.waitForTimeout(500)
+const light = await lightnessProbe()
+check(
+  'light mode keeps every node darker than the canvas',
+  light.theme === 'light' && light.max < light.canvas,
+  JSON.stringify(light),
+)
+check('light mode runs dark root -> lighter leaf', light.root < light.leaf, `root ${light.root} < leaf ${light.leaf}`)
+check(
+  'the ramp is inverted between themes, not shifted',
+  light.root < light.leaf && dark.root > dark.leaf,
+  `light ${light.root}->${light.leaf}, dark ${dark.root}->${dark.leaf}`,
+)
+
+/* --------------------------------------------------- reduced motion -- */
+
+const reduced = await browser.newPage({ viewport: { width: 1280, height: 820 }, reducedMotion: 'reduce' })
+await reduced.goto('http://localhost:5173/')
+await reduced.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
+await reduced.evaluate(() => {
+  const s = () => window.skillTree.getState()
+  const r = s().createRoot({ title: 'Root', icon: 'diamond' })
+  s().addNode(r, 'advance', { title: 'Child' })
+})
+await reduced.waitForTimeout(700)
+const rmState = await reduced.evaluate(async () => {
+  const el = () => [...document.querySelectorAll('.node')].find((n) => n.textContent.includes('Child'))
+  const before = el().style.transform
+  const box = el().getBoundingClientRect()
+  const canvas = document.querySelector('.canvas')
+  for (let i = 0; i < 10; i++) {
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: box.x - 120 + i * 26, clientY: box.y + 20, pointerType: 'mouse', bubbles: true }),
+    )
+    await new Promise((r) => requestAnimationFrame(r))
+  }
+  const during = el().style.transform
+  return { before, during, scaled: /scale\(1(\.0+)?\)/.test(before), laidOut: before !== '' }
+})
+check('reduced motion lays nodes out instantly, at full scale', rmState.laidOut && rmState.scaled, JSON.stringify(rmState))
+check('reduced motion disables the cursor push', rmState.before === rmState.during, `${rmState.before} vs ${rmState.during}`)
+await reduced.close()
+
 check('no uncaught errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 
 await browser.close()

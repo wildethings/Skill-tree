@@ -35,6 +35,7 @@ export function Canvas() {
 
   const [exiting, setExiting] = useState<string[]>([])
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null)
 
   const collapsed = graph.prefs.collapsedRootIds
   const layout = useMemo(() => layoutGraph(index, collapsed), [index, collapsed])
@@ -98,6 +99,8 @@ export function Canvas() {
 
   const prevPos = useRef<Record<string, Pos>>({})
   const firstFit = useRef(false)
+  const seenEdges = useRef(new Set<string>())
+  const drawnOnce = useRef(false)
 
   useLayoutEffect(() => {
     viewport.attach([edgeLayer.current, nodeLayer.current])
@@ -119,13 +122,29 @@ export function Canvas() {
     }
     prevPos.current = layout.pos
 
+    // A new edge draws itself in from parent to child. Done here rather than in
+    // render so it fires once per commit, and only after the first paint — the
+    // whole graph animating in on load is not what this is for.
+    const edgeKeys = new Set(edges.map((e) => e.key))
+    if (drawnOnce.current) {
+      for (const key of edgeKeys) {
+        if (seenEdges.current.has(key)) continue
+        const el = edgeLayer.current?.querySelector<SVGPathElement>(`[data-key="${CSS.escape(key)}"]`)
+        if (!el) continue
+        el.classList.add('edge-draw')
+        el.addEventListener('animationend', () => el.classList.remove('edge-draw'), { once: true })
+      }
+    }
+    seenEdges.current = edgeKeys
+    drawnOnce.current = true
+
     if (!firstFit.current && index.live.length > 0 && hostRef.current) {
       firstFit.current = true
       const rect = hostRef.current.getBoundingClientRect()
       viewport.fit(layout.bounds, { width: rect.width, height: rect.height })
     }
     eng.start()
-  }, [layout, weights, eng, viewport, index.live.length])
+  }, [layout, weights, edges, eng, viewport, index.live.length])
 
   useEffect(() => {
     eng.setReducedMotion(reduced)
@@ -158,8 +177,8 @@ export function Canvas() {
   /* Suspend the push whenever something else owns the pointer. */
   const detailOpen = ui.selectedId !== null || ui.adding !== null || ui.settingsOpen || ui.searchOpen
   useEffect(() => {
-    eng.suspendPush(detailOpen || menu !== null)
-  }, [eng, detailOpen, menu])
+    eng.suspendPush(detailOpen || menu !== null || drag !== null)
+  }, [eng, detailOpen, menu, drag])
 
   /* ---------------------------------------------------------- pointers -- */
 
@@ -234,14 +253,16 @@ export function Canvas() {
         const pos = layout.pos[g.id]
         const at = graphPoint(e)
         gesture.current = { kind: 'drag', id: g.id, grabX: at.x - pos.x, grabY: at.y - pos.y, moved: true }
+        setDrag({ id: g.id, over: null })
       }
       return
     }
 
     if (g.kind === 'drag') {
       const at = graphPoint(e)
-      const el = nodeLayer.current?.querySelector<HTMLElement>(`.node[data-id="${g.id}"]`)
-      if (el) el.style.transform = `translate3d(${at.x - g.grabX}px, ${at.y - g.grabY}px, 0)`
+      eng.dragTo(g.id, { x: at.x - g.grabX, y: at.y - g.grabY })
+      const over = dropTargetAt(e, g.id)
+      setDrag((d) => (d && d.over === over ? d : { id: g.id, over }))
       return
     }
 
@@ -271,6 +292,8 @@ export function Canvas() {
     if (g.kind === 'drag') {
       const at = graphPoint(e)
       const dropped = { x: at.x - g.grabX, y: at.y - g.grabY }
+      setDrag(null)
+      eng.endDrag()
       const node = graph.nodes[g.id]
       const target = dropTargetAt(e, g.id)
       if (target) {
@@ -290,10 +313,13 @@ export function Canvas() {
     }
   }
 
-  /** Dropping one node onto another re-parents it. */
-  const dropTargetAt = (e: React.PointerEvent, draggingId: string): string | null => {
-    const el = document.elementFromPoint(e.clientX, e.clientY)
-    const id = el?.closest?.('.node')?.getAttribute('data-id') ?? null
+  /**
+   * Dropping one node onto another re-parents it. The dragged card sits under
+   * the pointer, so it carries `pointer-events: none` while dragging —
+   * otherwise it is the only thing hit-testing ever finds.
+   */
+  const dropTargetAt = (e: { clientX: number; clientY: number }, draggingId: string): string | null => {
+    const id = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.node')?.getAttribute('data-id') ?? null
     return id && id !== draggingId ? id : null
   }
 
@@ -349,6 +375,19 @@ export function Canvas() {
       onPointerCancel={onPointerUp}
       onPointerLeave={() => eng.releaseCursor()}
       onWheel={onWheel}
+      onKeyDown={(e) => {
+        const id = nodeIdAt(e.target)
+        if (!id) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onTapNode(id)
+        }
+        if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+          e.preventDefault()
+          const rect = (e.target as HTMLElement).getBoundingClientRect()
+          setMenu({ id, x: rect.left + rect.width / 2, y: rect.bottom })
+        }
+      }}
       onContextMenu={(e) => {
         const id = nodeIdAt(e.target)
         if (!id) return
@@ -363,7 +402,12 @@ export function Canvas() {
               key={spec.key}
               ref={(el) => eng.registerEdge(spec, el)}
               className="edge"
+              data-key={spec.key}
               data-kind={spec.kind}
+              // Normalised length lets the draw-in animation work whatever the
+              // path's real length is. Cross-links keep user units, or their
+              // dash pattern would rescale with it.
+              pathLength={spec.kind === 'primary' ? 1 : undefined}
               data-dimmed={ui.focusRootId && index.rootIdOf[spec.to] !== ui.focusRootId ? true : undefined}
               stroke={edgeColor(spec)}
               fill="none"
@@ -385,6 +429,8 @@ export function Canvas() {
               tint={tints[id]}
               collapsedCount={isCollapsedRoot ? (index.subtreeSize[id] ?? 1) - 1 : null}
               milestones={ms.length ? { done: ms.filter((m) => m.done).length, total: ms.length } : null}
+              dragging={drag?.id === id}
+              dropTarget={drag?.over === id}
               dimmed={Boolean(ui.focusRootId && index.rootIdOf[id] !== ui.focusRootId)}
               highlighted={highlight.has(id)}
               linking={ui.linkingFrom === id}

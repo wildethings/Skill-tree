@@ -52,6 +52,9 @@ export class CanvasEngine {
   }
   private lastCursor: { x: number; y: number; t: number } | null = null
   private pushEnabled = true
+  /** A node held under the pointer. The engine still owns its transform, so its
+   *  edges follow it and no spring fights the drag. */
+  private dragging: { id: string; x: number; y: number } | null = null
   private reduced = prefersReducedMotion()
 
   constructor(private host: EngineHost) {}
@@ -139,6 +142,17 @@ export class CanvasEngine {
     }, 320)
   }
 
+  /** Pin a node to a position for the duration of a drag. */
+  dragTo(id: string, pos: Pos) {
+    this.dragging = { id, x: pos.x, y: pos.y }
+    this.kick()
+  }
+
+  endDrag() {
+    this.dragging = null
+    this.kick()
+  }
+
   positionOf(id: string): Pos | null {
     const m = this.nodes.get(id)
     return m ? { x: m.x.value, y: m.y.value } : null
@@ -222,6 +236,19 @@ export class CanvasEngine {
 
     let settled = true
     for (const [id, m] of this.nodes) {
+      if (this.dragging?.id === id) {
+        // Held by the pointer: no spring, no push, but still written here so
+        // the edge pass below picks the drag up.
+        m.x.value = this.dragging.x
+        m.y.value = this.dragging.y
+        m.x.velocity = 0
+        m.y.velocity = 0
+        m.px.value = 0
+        m.py.value = 0
+        this.writeNode(id)
+        settled = false
+        continue
+      }
       const atX = step(m.x, m.tx, LAYOUT_SPRING, dt)
       const atY = step(m.y, m.ty, LAYOUT_SPRING, dt)
       const atS = step(m.scale, m.targetScale, SCALE_SPRING, dt)

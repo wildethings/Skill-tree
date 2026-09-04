@@ -1236,3 +1236,43 @@ kbd {
   color: var(--text-faint);
   line-height: 1.5;
 }
+
+/* The dragged card follows the pointer, so it must not hit-test — it would
+   otherwise be the only thing under the cursor and hide every drop target. */
+.node[data-dragging] {
+  pointer-events: none;
+  z-index: 2;
+}
+
+.node[data-dragging] .node-tile { box-shadow: var(--shadow-3); }
+
+.node[data-drop] .node-tile {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+/* Node birth: the edge draws itself in from parent to child. Primary edges use
+   a normalised path length; a cross-link keeps its dash pattern and fades. */
+.edge[data-kind='primary'].edge-draw {
+  animation: edge-draw 420ms cubic-bezier(0.3, 1, 0.4, 1) both;
+}
+
+@keyframes edge-draw {
+  from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  to { stroke-dasharray: 1; stroke-dashoffset: 0; }
+}
+
+.edge[data-kind='cross'].edge-draw {
+  animation: edge-fade 420ms ease-out both;
+}
+
+@keyframes edge-fade {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
+}
+
+.node:focus-visible { outline: none; }
+.node:focus-visible .node-tile {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}

@@ -13,6 +13,8 @@ export type CardProps = {
   dimmed: boolean
   highlighted: boolean
   linking: boolean
+  dragging: boolean
+  dropTarget: boolean
   register: (el: HTMLElement | null) => void
 }
 
@@ -31,6 +33,8 @@ export const NodeCard = memo(function NodeCard({
   dimmed,
   highlighted,
   linking,
+  dragging,
+  dropTarget,
   register,
 }: CardProps) {
   const planned = node.state === 'planned'
@@ -41,10 +45,17 @@ export const NodeCard = memo(function NodeCard({
       ref={register}
       className="node"
       data-id={node.id}
+      role="button"
+      tabIndex={0}
+      aria-label={`${node.title || 'Untitled'}, ${planned ? 'planned' : 'started'}${
+        milestones ? `, ${milestones.done} of ${milestones.total} milestones` : ''
+      }${collapsedCount ? `, ${collapsedCount} hidden` : ''}`}
       data-planned={planned || undefined}
       data-dimmed={dimmed || undefined}
       data-highlight={highlighted || undefined}
       data-linking={linking || undefined}
+      data-dragging={dragging || undefined}
+      data-drop={dropTarget || undefined}
       style={{ width: NODE_W, height: NODE_H }}
     >
       <div

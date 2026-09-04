@@ -145,6 +145,23 @@ const added = await page.evaluate(() => {
 check('right-click to Advance creates a child', added.parent === 'Macarons' && added.depth === 2, JSON.stringify(added))
 check('a new non-root carries no base colour', added.baseColor === null)
 
+/* --------------------------------------------------------- edge draw-in -- */
+
+const drew = await page.evaluate(async () => {
+  const s = () => window.skillTree.getState()
+  const target = s().index.live.find((n) => n.title === 'Italian meringue')
+  s().addNode(target.id, 'advance', { title: 'French meringue' })
+  // Sample within the animation window.
+  for (let i = 0; i < 6; i++) await new Promise((r) => requestAnimationFrame(r))
+  return document.querySelectorAll('.edge.edge-draw').length
+})
+check('a new edge draws itself in', drew === 1, `${drew} animating`)
+await page.waitForTimeout(600)
+check(
+  'the draw-in class is cleaned up afterwards',
+  (await page.evaluate(() => document.querySelectorAll('.edge.edge-draw').length)) === 0,
+)
+
 /* ------------------------------------------------- re-shade on deepening -- */
 
 const reshade = await page.evaluate(() => {
@@ -184,6 +201,69 @@ await page.evaluate(() => {
 await page.waitForTimeout(900)
 const expanded = await page.evaluate(() => document.querySelectorAll('.node').length)
 check('expanding brings them back', expanded > collapsed.visible, `${collapsed.visible} -> ${expanded}`)
+
+/* ------------------------------------------------------------ drag/drop -- */
+
+// The view is only fitted on load, and the graph has grown since; reload so
+// every node is back on screen before driving the mouse at one.
+await page.reload()
+await page.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
+await page.waitForTimeout(1200)
+
+// Drag a node onto another to re-parent it, and drag one to empty space to
+// record an offset.
+const dragNodeOnto = async (from, to) => {
+  const a = await page.locator('.node', { hasText: from }).boundingBox()
+  const b = await page.locator('.node', { hasText: to }).boundingBox()
+  await page.mouse.move(a.x + a.width / 2, a.y + 24)
+  await page.mouse.down()
+  await page.mouse.move(a.x + a.width / 2 + 12, a.y + 30, { steps: 3 })
+  await page.mouse.move(b.x + b.width / 2, b.y + 24, { steps: 12 })
+  await page.waitForTimeout(120)
+  const highlighted = await page.evaluate(() => !!document.querySelector('.node[data-drop]'))
+  await page.mouse.up()
+  await page.waitForTimeout(700)
+  return highlighted
+}
+
+const highlighted = await dragNodeOnto('Italian meringue', 'Faceting')
+check('the drop target highlights during a drag', highlighted)
+const reparented = await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  const n = s.index.live.find((n) => n.title === 'Italian meringue')
+  return { parent: s.graph.nodes[n.primaryParentId]?.title, offset: n.offset, root: s.graph.nodes[s.index.rootIdOf[n.id]]?.title }
+})
+check('dropping onto a node re-parents it', reparented.parent === 'Faceting', JSON.stringify(reparented))
+check('re-parenting clears the manual offset', reparented.offset.dx === 0 && reparented.offset.dy === 0)
+
+const macBefore = await xyOf('Macarons')
+const macBox = await page.locator('.node', { hasText: 'Macarons' }).boundingBox()
+await page.mouse.move(macBox.x + macBox.width / 2, macBox.y + 24)
+await page.mouse.down()
+await page.mouse.move(macBox.x + macBox.width / 2 + 70, macBox.y + 70, { steps: 10 })
+await page.mouse.up()
+await page.waitForTimeout(700)
+const nudged = await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  return s.index.live.find((n) => n.title === 'Macarons').offset
+})
+check('dropping on empty canvas records an offset', nudged.dx !== 0 || nudged.dy !== 0, JSON.stringify(nudged))
+const macAfter = await xyOf('Macarons')
+check('the offset moves the node', macBefore && macAfter && Math.hypot(macAfter.x - macBefore.x, macAfter.y - macBefore.y) > 10)
+
+/* ------------------------------------------------------------- keyboard -- */
+
+const viaKeyboard = await page.evaluate(async () => {
+  const el = [...document.querySelectorAll('.node')].find((n) => n.textContent.includes('Choux'))
+  el.focus()
+  const focused = document.activeElement === el
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await new Promise((r) => setTimeout(r, 200))
+  return { focused, selected: window.skillTreeUI.getState().selectedId }
+})
+check('nodes are keyboard reachable and openable', viaKeyboard.focused && viaKeyboard.selected !== null, JSON.stringify(viaKeyboard))
+await page.keyboard.press('Escape')
+await page.waitForTimeout(300)
 
 /* -------------------------------------------------------------- persist -- */
 

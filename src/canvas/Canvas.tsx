@@ -142,7 +142,7 @@ export function Canvas() {
     const rect = hostRef.current.getBoundingClientRect()
     const subset: Record<string, Pos> = {}
     for (const id of ids) subset[id] = layout.pos[id]
-    viewport.centreOn(boundsOf(subset), { width: rect.width, height: rect.height })
+    viewport.fit(boundsOf(subset), { width: rect.width, height: rect.height }, { padding: 48, min: 0.5, max: 1.1 })
   }, [ui.focusRootId, layout, index, viewport])
 
   useEffect(() => {

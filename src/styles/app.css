@@ -57,6 +57,22 @@
   display: flex;
   align-items: center;
   gap: var(--s-1);
+  min-width: 0;
+}
+
+.topbar .tabs { flex: none; }
+.topbar-right .btn-icon { flex: none; }
+
+.focus-chip { min-width: 0; }
+.focus-chip span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* No room for the branch name next to the tabs on a phone; the icon carries it. */
+@media (max-width: 640px) {
+  .focus-chip span { display: none; }
 }
 
 /* ================================================================ canvas == */
@@ -225,6 +241,12 @@
   backdrop-filter: blur(8px);
   cursor: pointer;
   z-index: 3;
+  overflow: hidden;
+}
+
+/* A desktop affordance. On a phone, focus mode does this job better. */
+@media (max-width: 640px) {
+  .minimap { display: none; }
 }
 
 .minimap canvas { display: block; }

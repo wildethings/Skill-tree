@@ -49,17 +49,32 @@ export class Viewport {
     return { x: (screenX - this.x) / this.k, y: (screenY - this.y) / this.k }
   }
 
-  /** Frame `bounds` inside `size` with padding. Used on fresh load. */
-  fit(bounds: Bounds, size: { width: number; height: number }, padding = 72) {
+  /**
+   * Frame `bounds` inside `size`.
+   *
+   * `min` is a legibility floor, not the zoom limit: on a phone, fitting eight
+   * roots would shrink a node past reading size, so the graph is allowed to
+   * overflow and be panned instead.
+   */
+  fit(
+    bounds: Bounds,
+    size: { width: number; height: number },
+    { padding = 72, min = 0.45, max = MAX_ZOOM }: { padding?: number; min?: number; max?: number } = {},
+  ) {
     const w = Math.max(1, bounds.maxX - bounds.minX)
     const h = Math.max(1, bounds.maxY - bounds.minY)
-    const k = Math.min(MAX_ZOOM, Math.min((size.width - padding * 2) / w, (size.height - padding * 2) / h))
-    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k))
-    this.set(
-      size.width / 2 - ((bounds.minX + bounds.maxX) / 2) * clamped,
-      size.height / 2 - ((bounds.minY + bounds.maxY) / 2) * clamped,
-      clamped,
-    )
+    const pad = Math.min(padding, Math.min(size.width, size.height) / 5)
+    const raw = Math.min((size.width - pad * 2) / w, (size.height - pad * 2) / h)
+    const k = Math.min(max, Math.max(min, Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, raw))))
+
+    // Horizontally: centre what fits, anchor to the first root what does not.
+    // Landing in the middle of an orchard that overflows is worse than landing
+    // on its first root and panning from there.
+    const x = w * k <= size.width - pad * 2 ? size.width / 2 - ((bounds.minX + bounds.maxX) / 2) * k : pad - bounds.minX * k
+
+    // Vertically: always hang from the top, because that is the composition —
+    // roots in a row along the top, everything growing downward from them.
+    this.set(x, pad - bounds.minY * k, k)
   }
 
   /** Centre a rectangle of graph space without changing zoom. */

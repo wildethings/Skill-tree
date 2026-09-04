@@ -93,8 +93,10 @@ function TopBar() {
 
       <div className="topbar-right">
         {ui.focusRootId ? (
-          <button className="chip chip-quiet" onClick={() => ui.focusRoot(null)}>
-            <Icon name="eye" size={14} /> {focusTitle || 'Focused'} <Icon name="x" size={12} />
+          <button className="chip chip-quiet focus-chip" onClick={() => ui.focusRoot(null)} aria-label="Leave focus mode">
+            <Icon name="eye" size={14} />
+            <span>{focusTitle || 'Focused'}</span>
+            <Icon name="x" size={12} />
           </button>
         ) : null}
         <button className="btn-icon" onClick={() => ui.openSearch(true)} aria-label="Search" title="Search (⌘K)">

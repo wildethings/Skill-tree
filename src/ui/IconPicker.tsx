@@ -49,7 +49,11 @@ export default function IconPicker({
         </button>
       </div>
 
-      <div className="picker-grid" style={{ height: VIEWPORT_H }} onScroll={(e) => setScroll(e.currentTarget.scrollTop)}>
+      <div
+        className="picker-grid"
+        style={{ height: Math.min(VIEWPORT_H, rows * rowH + 16) }}
+        onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
+      >
         <div style={{ height: rows * rowH, position: 'relative' }}>
           <div style={{ position: 'absolute', top: first * rowH, display: 'grid', gridTemplateColumns: `repeat(${COLUMNS}, ${CELL}px)`, gap: GAP }}>
             {slice.map((name) => (

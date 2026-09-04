@@ -60,6 +60,17 @@ export type NodeTint = {
   lch: LCH
 }
 
+/**
+ * Interpolate the cross-link gradient in Oklab — the Cartesian form of the same
+ * space the ramp is built in. sRGB interpolation between two saturated colours
+ * passes through a muddy grey midpoint, which is exactly what this gradient
+ * must not do.
+ */
+const GRADIENT_SPACE =
+  typeof CSS !== 'undefined' && CSS.supports?.('background-image', 'linear-gradient(in oklab, red, blue)')
+    ? 'in oklab '
+    : ''
+
 const solidFg = (lch: LCH) => (lch.l > 0.62 ? 'oklch(0.24 0.012 265)' : 'oklch(0.985 0.002 265)')
 
 export function tintFor(index: GraphIndex, nodeId: string, theme: Theme): NodeTint {
@@ -84,13 +95,25 @@ export function tintFor(index: GraphIndex, nodeId: string, theme: Theme): NodeTi
     const darker = own.l <= other.l ? own : other
     return {
       stops: [own, other],
-      fill: `linear-gradient(135deg, ${css(own)}, ${css(other)})`,
+      // Stops are pulled inward so each parent holds a solid corner and the two
+      // colours meet in a narrow band, rather than washing across the whole tile.
+      fill: `linear-gradient(${GRADIENT_SPACE}135deg, ${css(own)} 22%, ${css(other)} 78%)`,
       fg: bothDark ? 'oklch(0.985 0.002 265)' : css({ ...darker, l: Math.min(darker.l, 0.34) }),
       lch: own,
     }
   }
 
   return { stops: [own], fill: css(own), fg: solidFg(own), lch: own }
+}
+
+/**
+ * The tint a cross-link edge is drawn in: the source parent's ramp read at the
+ * child's depth, so the dashed edge matches its own stop in the child's gradient.
+ */
+export function crossTint(index: GraphIndex, childId: string, parentId: string, theme: Theme): LCH {
+  const rootId = index.rootIdOf[parentId]
+  const base = parseOklch(index.byId[rootId ?? '']?.baseColor ?? 'oklch(0.32 0.09 264)')
+  return rampAt(base, index.depth[childId] ?? 0, index.maxDepthOfRoot[rootId ?? ''] ?? 0, theme)
 }
 
 /** Every node's tint, recomputed from scratch. Derived tints are never persisted. */

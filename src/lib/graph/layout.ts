@@ -134,25 +134,29 @@ export function offsetForDrop(node: SkillNode, laidOut: Pos, dropped: Pos): { dx
 }
 
 /**
- * A curve between two node centres. Edges usually run downward, but a cross-link
- * between roots can run sideways or up, so the control points follow whichever
- * axis dominates.
+ * A curve between two node centres. The graph flows downward, so an edge routes
+ * vertically whenever the child is genuinely below; a cross-link that runs
+ * sideways or up routes horizontally instead. Anchoring and curve shape come
+ * from the same decision, so the ends always meet the card cleanly.
  */
 export function edgePath(from: Pos, to: Pos): string {
   const dx = to.x - from.x
   const dy = to.y - from.y
-  if (Math.abs(dy) >= Math.abs(dx)) {
-    const k = Math.max(28, Math.abs(dy) * 0.45)
-    return `M${from.x},${from.y} C${from.x},${from.y + k} ${to.x},${to.y - k} ${to.x},${to.y}`
-  }
-  const k = Math.max(36, Math.abs(dx) * 0.4)
-  return `M${from.x},${from.y} C${from.x + Math.sign(dx) * k},${from.y} ${to.x - Math.sign(dx) * k},${to.y} ${to.x},${to.y}`
-}
+  const vertical = dy >= 24 || Math.abs(dy) >= Math.abs(dx)
 
-/** Anchor an edge on the node's rim rather than its centre, so it meets the card cleanly. */
-export function anchor(from: Pos, to: Pos): Pos {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  if (Math.abs(dy) >= Math.abs(dx)) return { x: from.x, y: from.y + Math.sign(dy || 1) * (NODE_H / 2 - 6) }
-  return { x: from.x + Math.sign(dx) * (NODE_W / 2 - 6), y: from.y }
+  if (vertical) {
+    const a = { x: from.x, y: from.y + Math.sign(dy || 1) * (NODE_H / 2 - 8) }
+    const b = { x: to.x, y: to.y - Math.sign(dy || 1) * (NODE_H / 2 - 8) }
+    const k = Math.max(24, Math.abs(b.y - a.y) * 0.45)
+    return `M${a.x},${a.y} C${a.x},${a.y + Math.sign(dy || 1) * k} ${b.x},${b.y - Math.sign(dy || 1) * k} ${b.x},${b.y}`
+  }
+
+  // A sideways link leaves from the foot of each card and swings below the row,
+  // so it stays readable instead of cutting through whatever sits between them.
+  const side = Math.sign(dx || 1)
+  const a = { x: from.x + side * (NODE_W / 2 - 22), y: from.y + NODE_H / 2 - 12 }
+  const b = { x: to.x - side * (NODE_W / 2 - 22), y: to.y + NODE_H / 2 - 12 }
+  const k = Math.max(40, Math.abs(b.x - a.x) * 0.3)
+  const sag = Math.min(96, Math.max(34, Math.abs(b.x - a.x) * 0.14))
+  return `M${a.x},${a.y} C${a.x + side * k},${a.y + sag} ${b.x - side * k},${b.y + sag} ${b.x},${b.y}`
 }

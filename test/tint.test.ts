@@ -86,3 +86,13 @@ test('foreground flips to stay legible on the tint', () => {
   assert.match(dark.fg, /0\.985/) // near-white on the dark root
   assert.match(light.fg, /0\.24/) // near-black on the lightened dark-mode root
 })
+
+test('edge tints stay readable at the pale end of the ramp', async () => {
+  const { edgeTint } = await import('../src/lib/color/tint')
+  const pale = { l: 0.8, c: 0.05, h: 264 }
+  assert.ok(edgeTint(pale, 'light').l <= 0.62, 'a light-mode edge never washes out')
+  assert.equal(edgeTint(pale, 'light').h, pale.h, 'hue is preserved, so the edge still reads as its branch')
+  const dark = { l: 0.42, c: 0.09, h: 264 }
+  assert.ok(edgeTint(dark, 'dark').l >= 0.58, 'a dark-mode edge never sinks into the canvas')
+  assert.equal(edgeTint({ l: 0.45, c: 0.09, h: 264 }, 'light').l, 0.45, 'mid-ramp tints are left alone')
+})

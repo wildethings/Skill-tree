@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useData } from '../data/store'
 import { useUI } from '../ui/uiStore'
 import { useReducedMotion, useTheme } from '../ui/useTheme'
 import { milestonesOf } from '../lib/graph/graph'
 import { NODE_H, NODE_W, boundsOf, edgePath, layoutGraph, offsetForDrop, type Pos } from '../lib/graph/layout'
-import { crossTint, tintMap } from '../lib/color/tint'
+import { crossTint, edgeTint, tintMap } from '../lib/color/tint'
 import { css } from '../lib/color/oklch'
 import { CanvasEngine, pushWeight, type EdgeSpec } from './engine'
 import { Viewport } from './viewport'
@@ -81,8 +81,8 @@ export function Canvas() {
    */
   const edgeColor = useCallback(
     (spec: EdgeSpec) => {
-      if (spec.kind === 'primary') return tints[spec.to] ? css(tints[spec.to].lch) : 'var(--line)'
-      return css(crossTint(index, spec.to, spec.from, theme))
+      if (spec.kind === 'primary') return tints[spec.to] ? css(edgeTint(tints[spec.to].lch, theme)) : 'var(--line)'
+      return css(edgeTint(crossTint(index, spec.to, spec.from, theme), theme))
     },
     [tints, index, theme],
   )
@@ -398,19 +398,12 @@ export function Canvas() {
       <svg className="edges" aria-hidden="true">
         <g ref={edgeLayer}>
           {edges.map((spec) => (
-            <path
+            <Edge
               key={spec.key}
-              ref={(el) => eng.registerEdge(spec, el)}
-              className="edge"
-              data-key={spec.key}
-              data-kind={spec.kind}
-              // Normalised length lets the draw-in animation work whatever the
-              // path's real length is. Cross-links keep user units, or their
-              // dash pattern would rescale with it.
-              pathLength={spec.kind === 'primary' ? 1 : undefined}
-              data-dimmed={ui.focusRootId && index.rootIdOf[spec.to] !== ui.focusRootId ? true : undefined}
+              spec={spec}
+              engine={eng}
               stroke={edgeColor(spec)}
-              fill="none"
+              dimmed={Boolean(ui.focusRootId && index.rootIdOf[spec.to] !== ui.focusRootId)}
             />
           ))}
         </g>
@@ -428,13 +421,14 @@ export function Canvas() {
               node={node}
               tint={tints[id]}
               collapsedCount={isCollapsedRoot ? (index.subtreeSize[id] ?? 1) - 1 : null}
-              milestones={ms.length ? { done: ms.filter((m) => m.done).length, total: ms.length } : null}
+              milestonesDone={ms.filter((m) => m.done).length}
+              milestonesTotal={ms.length}
               dragging={drag?.id === id}
               dropTarget={drag?.over === id}
               dimmed={Boolean(ui.focusRootId && index.rootIdOf[id] !== ui.focusRootId)}
               highlighted={highlight.has(id)}
               linking={ui.linkingFrom === id}
-              register={(el) => eng.registerNode(id, el)}
+              engine={eng}
             />
           )
         })}
@@ -457,6 +451,36 @@ export function Canvas() {
     </div>
   )
 }
+
+/** Its own component so the engine registration ref stays stable. */
+const Edge = memo(function Edge({
+  spec,
+  engine,
+  stroke,
+  dimmed,
+}: {
+  spec: EdgeSpec
+  engine: CanvasEngine
+  stroke: string
+  dimmed: boolean
+}) {
+  const register = useCallback((el: SVGPathElement | null) => engine.registerEdge(spec, el), [engine, spec])
+  return (
+    <path
+      ref={register}
+      className="edge"
+      data-key={spec.key}
+      data-kind={spec.kind}
+      // Normalised length lets the draw-in animation work whatever the path's
+      // real length is. Cross-links keep user units, or their dash pattern
+      // would rescale with it.
+      pathLength={spec.kind === 'primary' ? 1 : undefined}
+      data-dimmed={dimmed || undefined}
+      stroke={stroke}
+      fill="none"
+    />
+  )
+})
 
 function NodeMenu({
   menu,

@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { SkillNode } from '../types'
 import type { NodeTint } from '../lib/color/tint'
 import { NODE_H, NODE_W } from '../lib/graph/layout'
+import type { CanvasEngine } from './engine'
 import { Icon } from '../ui/Icon'
 
 export type CardProps = {
@@ -9,13 +10,15 @@ export type CardProps = {
   tint: NodeTint
   /** Hidden-node count shown on a collapsed root. */
   collapsedCount: number | null
-  milestones: { done: number; total: number } | null
+  /** Passed as primitives so memo can actually do its job. */
+  milestonesDone: number
+  milestonesTotal: number
   dimmed: boolean
   highlighted: boolean
   linking: boolean
   dragging: boolean
   dropTarget: boolean
-  register: (el: HTMLElement | null) => void
+  engine: CanvasEngine
 }
 
 /**
@@ -29,16 +32,19 @@ export const NodeCard = memo(function NodeCard({
   node,
   tint,
   collapsedCount,
-  milestones,
+  milestonesDone,
+  milestonesTotal,
   dimmed,
   highlighted,
   linking,
   dragging,
   dropTarget,
-  register,
+  engine,
 }: CardProps) {
   const planned = node.state === 'planned'
   const gradient = tint.stops.length === 2
+  // Stable across renders, so the engine is not re-registered on every UI change.
+  const register = useCallback((el: HTMLElement | null) => engine.registerNode(node.id, el), [engine, node.id])
 
   return (
     <div
@@ -48,7 +54,7 @@ export const NodeCard = memo(function NodeCard({
       role="button"
       tabIndex={0}
       aria-label={`${node.title || 'Untitled'}, ${planned ? 'planned' : 'started'}${
-        milestones ? `, ${milestones.done} of ${milestones.total} milestones` : ''
+        milestonesTotal ? `, ${milestonesDone} of ${milestonesTotal} milestones` : ''
       }${collapsedCount ? `, ${collapsedCount} hidden` : ''}`}
       data-planned={planned || undefined}
       data-dimmed={dimmed || undefined}
@@ -75,12 +81,12 @@ export const NodeCard = memo(function NodeCard({
         {node.title || <span className="node-untitled">Untitled</span>}
       </div>
 
-      {milestones && milestones.total > 0 ? (
-        <div className="node-milestones" aria-label={`${milestones.done} of ${milestones.total} milestones`}>
-          {Array.from({ length: Math.min(milestones.total, 5) }, (_, i) => (
-            <span key={i} data-done={i < milestones.done || undefined} />
+      {milestonesTotal > 0 ? (
+        <div className="node-milestones" aria-hidden="true">
+          {Array.from({ length: Math.min(milestonesTotal, 5) }, (_, i) => (
+            <span key={i} data-done={i < milestonesDone || undefined} />
           ))}
-          {milestones.total > 5 ? <span className="node-milestones-more">+{milestones.total - 5}</span> : null}
+          {milestonesTotal > 5 ? <span className="node-milestones-more">+{milestonesTotal - 5}</span> : null}
         </div>
       ) : null}
     </div>

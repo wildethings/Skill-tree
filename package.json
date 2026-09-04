@@ -10,7 +10,8 @@
     "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false --pretty",
     "icons": "node scripts/build-icon-sprite.mjs",
     "test": "node scripts/run-tests.mjs",
-    "test:browser": "node browser-test.mjs"
+    "test:browser": "node browser-test.mjs",
+    "test:perf": "node perf.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",

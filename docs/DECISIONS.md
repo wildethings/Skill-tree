@@ -84,6 +84,15 @@ The dashed cross-link edge is drawn in the source parent's ramp read at the
 *child's* depth — which is exactly that parent's stop in the child's gradient,
 so the edge and the tile agree.
 
+### Edge tints are clamped into a readable band
+
+Nodes and edges share a tint, but a 2px stroke cannot carry the pale end of the
+ramp the way a 54px filled tile can — at `L 0.80` on a light canvas a deep
+branch's edges effectively vanish, and a cross-link between two deep nodes with
+it. Edges clamp lightness (at most `0.62` in light mode, at least `0.58` in
+dark) while keeping hue and chroma, so an edge still reads as its branch and no
+connection disappears.
+
 ### Only primary edges go into dagre
 
 Cross-links are drawn, not laid out. Feeding them to dagre would let a

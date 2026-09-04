@@ -41,7 +41,7 @@ export class CanvasEngine {
   private nodes = new Map<string, Motion>()
   /** Kept apart from `nodes` because ref callbacks fire before setTargets. */
   private elements = new Map<string, HTMLElement>()
-  private edges: Array<EdgeSpec & { el: SVGPathElement }> = []
+  private edges = new Map<string, EdgeSpec & { el: SVGPathElement }>()
   private raf = 0
   private last = 0
   private running = false
@@ -70,13 +70,9 @@ export class CanvasEngine {
   }
 
   registerEdge(spec: EdgeSpec, el: SVGPathElement | null) {
-    this.edges = this.edges.filter((e) => e.key !== spec.key)
-    if (el) this.edges.push({ ...spec, el })
+    if (el) this.edges.set(spec.key, { ...spec, el })
+    else this.edges.delete(spec.key)
     this.kick()
-  }
-
-  clearEdges() {
-    this.edges = []
   }
 
   /**
@@ -263,7 +259,7 @@ export class CanvasEngine {
 
     // Edges repaint from displaced positions every frame — nodes that move
     // while their edges stay put would destroy the effect entirely.
-    for (const edge of this.edges) {
+    for (const edge of this.edges.values()) {
       const a = this.nodes.get(edge.from)
       const b = this.nodes.get(edge.to)
       if (!a || !b) continue

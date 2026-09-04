@@ -107,6 +107,17 @@ export function tintFor(index: GraphIndex, nodeId: string, theme: Theme): NodeTi
 }
 
 /**
+ * Edges carry the same tint as their nodes, but a 2px stroke cannot hold the
+ * pale end of the ramp the way a 54px tile can. This pulls an edge's lightness
+ * into a band that stays readable against the canvas, keeping hue and chroma —
+ * so a deep branch's edges still read as that branch, and a cross-link between
+ * two deep nodes is never invisible.
+ */
+export function edgeTint(lch: LCH, theme: Theme): LCH {
+  return theme === 'light' ? { ...lch, l: Math.min(lch.l, 0.62) } : { ...lch, l: Math.max(lch.l, 0.58) }
+}
+
+/**
  * The tint a cross-link edge is drawn in: the source parent's ramp read at the
  * child's depth, so the dashed edge matches its own stop in the child's gradient.
  */

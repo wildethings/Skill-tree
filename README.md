@@ -30,8 +30,9 @@ registration, row-level security and the photo bucket. See
 
 ```sh
 npm run build         # typecheck + production build
-npm test              # 56 unit tests: graph rules, tint ramp, layout, store, merge
-npm run test:browser  # 15 runtime checks (needs `npm run dev` running)
+npm test              # 57 unit tests: graph rules, tint ramp, layout, store, merge
+npm run test:browser  # 23 runtime checks (needs `npm run dev` running)
+npm run test:perf     # frame timing at the design target: 8 roots, 80 nodes
 ```
 
 ## How it fits together

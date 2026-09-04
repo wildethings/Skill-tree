@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useData } from '../data/store'
 import { useUI, type AddIntent } from './uiStore'
 import { PALETTE_CSS } from '../lib/color/palette'
@@ -15,7 +15,11 @@ export function AddNode({ intent }: { intent: AddIntent }) {
   const addNode = useData((s) => s.addNode)
   const parentTitle = useData((s) => (intent.fromId ? s.graph.nodes[intent.fromId]?.title : null))
   const parentIcon = useData((s) => (intent.fromId ? s.graph.nodes[intent.fromId]?.icon : null))
-  const usedColors = useData((s) => s.index.rootIds.map((id) => s.graph.nodes[id].baseColor))
+  const rootIds = useData((s) => s.index.rootIds)
+  const nodes = useData((s) => s.graph.nodes)
+  // Derived in a memo, not in the selector: a selector that builds a new array
+  // on every call breaks the store snapshot and loops React.
+  const usedColors = useMemo(() => rootIds.map((id) => nodes[id]?.baseColor ?? ''), [rootIds, nodes])
 
   const startAdd = useUI((s) => s.startAdd)
   const select = useUI((s) => s.select)

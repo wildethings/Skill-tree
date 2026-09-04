@@ -79,6 +79,7 @@ export function Minimap({
   }, [viewport, layout, host])
 
   const jumpTo = (e: React.PointerEvent) => {
+    e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
     const { k, minX, minY, w, h } = scaleOf()
     const graphX = (e.clientX - rect.left - (W - w) / 2) / k + minX
@@ -91,7 +92,7 @@ export function Minimap({
   if (Object.keys(layout.pos).length === 0) return null
 
   return (
-    <div className="minimap" onPointerDown={jumpTo} onPointerUp={(e) => e.stopPropagation()} aria-label="Minimap">
+    <div className="minimap canvas-overlay" onPointerDown={jumpTo} aria-label="Minimap">
       <canvas ref={ref} style={{ width: W, height: H }} />
       <div className="minimap-frame" ref={frame} />
     </div>

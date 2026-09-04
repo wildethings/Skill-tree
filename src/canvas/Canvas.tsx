@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useData } from '../data/store'
 import { useUI } from '../ui/uiStore'
 import { useReducedMotion, useTheme } from '../ui/useTheme'
@@ -176,6 +177,13 @@ export function Canvas() {
     (target as HTMLElement | null)?.closest?.('.node')?.getAttribute('data-id') ?? null
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // A secondary button is opening the context menu, not starting a gesture.
+    if (e.button > 0) return
+    // Chrome layered over the canvas owns its own pointers. This guard matters
+    // even for the portalled menu: React propagates events through the React
+    // tree, not the DOM tree, so a portal still reaches this handler — and
+    // taking pointer capture here would swallow the click.
+    if ((e.target as HTMLElement).closest('.canvas-overlay')) return
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()]
@@ -426,10 +434,10 @@ function NodeMenu({
   const node = useData((s) => s.graph.nodes[menu.id])
   const offset = node?.offset
 
-  return (
+  return createPortal(
     <>
-      <div className="menu-scrim" onPointerDown={onClose} />
-      <div className="menu" style={{ left: menu.x, top: menu.y }} role="menu">
+      <div className="menu-scrim canvas-overlay" onPointerDown={onClose} />
+      <div className="menu canvas-overlay" style={{ left: menu.x, top: menu.y }} role="menu">
         <button
           role="menuitem"
           onClick={() => {
@@ -478,14 +486,15 @@ function NodeMenu({
           </button>
         ) : null}
       </div>
-    </>
+    </>,
+    document.body,
   )
 }
 
 function EmptyCanvas() {
   const startAdd = useUI((s) => s.startAdd)
   return (
-    <div className="empty-canvas">
+    <div className="empty-canvas canvas-overlay">
       <div className="empty-art">
         <Icon name="tree" size={40} />
       </div>

@@ -1,0 +1,208 @@
+/**
+ * Browser checks for the things that only exist at runtime: the cursor push
+ * invariants, the add flow, collapse, and re-parenting by drag.
+ * Run with the dev server up:  npm run dev &  node browser-test.mjs
+ */
+import { chromium } from 'playwright'
+
+const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+const results = []
+const check = (name, ok, detail = '') => {
+  results.push({ name, ok, detail })
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
+}
+
+const browser = await chromium.launch({ executablePath: CHROME })
+const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+const errors = []
+page.on('pageerror', (e) => errors.push(String(e)))
+
+await page.goto('http://localhost:5173/')
+await page.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
+
+await page.evaluate(() => {
+  const s = () => window.skillTree.getState()
+  const root = s().createRoot({ title: 'Pâtisserie', icon: 'cookie', baseColor: 'oklch(0.32 0.125 348)' })
+  const choux = s().addNode(root, 'advance', { title: 'Choux' })
+  const eclair = s().addNode(choux, 'advance', { title: 'Éclairs' })
+  s().addNode(eclair, 'advance', { title: 'Croquembouche' })
+  s().addNode(root, 'branch', { title: 'Macarons' })
+  const lap = s().createRoot({ title: 'Lapidary', icon: 'diamond', baseColor: 'oklch(0.32 0.09 205)' })
+  s().addNode(lap, 'advance', { title: 'Faceting' })
+})
+await page.waitForTimeout(900)
+
+const transformOf = (title) =>
+  page.evaluate((t) => {
+    const el = [...document.querySelectorAll('.node')].find((n) => n.textContent.includes(t))
+    return el?.style.transform ?? ''
+  }, title)
+
+const xyOf = async (title) => {
+  const t = await transformOf(title)
+  const m = t.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/)
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null
+}
+
+/* ---------------------------------------------------------- cursor push -- */
+
+const restAt = await xyOf('Croquembouche')
+check('nodes get a laid-out transform', restAt !== null, JSON.stringify(restAt))
+
+// Sweep the cursor across the leaf node fast enough to displace it.
+const box = await page.locator('.node', { hasText: 'Croquembouche' }).boundingBox()
+await page.mouse.move(box.x - 160, box.y + box.height / 2)
+let maxDisplacement = 0
+for (let i = 0; i <= 12; i++) {
+  await page.mouse.move(box.x - 160 + i * 28, box.y + box.height / 2)
+  const at = await xyOf('Croquembouche')
+  if (at && restAt) maxDisplacement = Math.max(maxDisplacement, Math.hypot(at.x - restAt.x, at.y - restAt.y))
+}
+check('the cursor displaces nearby nodes', maxDisplacement > 2, `${maxDisplacement.toFixed(1)}px`)
+check('displacement is capped', maxDisplacement <= 26, `${maxDisplacement.toFixed(1)}px <= 24px + spring overshoot`)
+
+// A deep leaf must swing further than a root.
+const rootRest = await xyOf('Pâtisserie')
+const rootBox = await page.locator('.node', { hasText: 'Pâtisserie' }).boundingBox()
+await page.mouse.move(rootBox.x - 160, rootBox.y + rootBox.height / 2)
+let rootMax = 0
+for (let i = 0; i <= 12; i++) {
+  await page.mouse.move(rootBox.x - 160 + i * 28, rootBox.y + rootBox.height / 2)
+  const at = await xyOf('Pâtisserie')
+  if (at && rootRest) rootMax = Math.max(rootMax, Math.hypot(at.x - rootRest.x, at.y - rootRest.y))
+}
+check('roots barely move, leaves swing furthest', rootMax < maxDisplacement, `root ${rootMax.toFixed(1)} < leaf ${maxDisplacement.toFixed(1)}`)
+
+// Everything must settle back to exactly the laid-out position.
+await page.mouse.move(20, 780)
+await page.waitForTimeout(1200)
+const settled = await xyOf('Croquembouche')
+check(
+  'displacement always resolves to zero',
+  settled && restAt && Math.hypot(settled.x - restAt.x, settled.y - restAt.y) < 0.05,
+  `${JSON.stringify(settled)} vs ${JSON.stringify(restAt)}`,
+)
+
+// It must never touch persisted state.
+const offsets = await page.evaluate(() =>
+  Object.values(window.skillTree.getState().graph.nodes).map((n) => n.offset),
+)
+check(
+  'push is never written to offset',
+  offsets.every((o) => o.dx === 0 && o.dy === 0),
+  JSON.stringify(offsets),
+)
+
+// Losing the pointer mid-spring must settle, not freeze.
+await page.mouse.move(box.x - 60, box.y + box.height / 2)
+await page.mouse.move(box.x + 60, box.y + box.height / 2)
+await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+await page.waitForTimeout(1000)
+const afterBlur = await xyOf('Croquembouche')
+check(
+  'losing focus mid-spring settles the graph',
+  afterBlur && restAt && Math.hypot(afterBlur.x - restAt.x, afterBlur.y - restAt.y) < 0.05,
+)
+
+/* ------------------------------------------------------------ edge sync -- */
+
+const leafBox = await page.locator('.node', { hasText: 'Croquembouche' }).boundingBox()
+const edgeMovesWithNodes = await page.evaluate(async (box) => {
+  // The edge that ends at the leaf must move when the leaf does.
+  const paths = [...document.querySelectorAll('.edge')]
+  const before = paths.map((p) => p.getAttribute('d'))
+  const canvas = document.querySelector('.canvas')
+  for (let i = 0; i < 14; i++) {
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: box.x - 140 + i * 26,
+        clientY: box.y + box.height / 2,
+        pointerType: 'mouse',
+        bubbles: true,
+      }),
+    )
+    await new Promise((r) => requestAnimationFrame(r))
+  }
+  return paths.some((p, i) => p.getAttribute('d') !== before[i])
+}, leafBox)
+check('edges repaint from displaced positions', edgeMovesWithNodes)
+
+/* ------------------------------------------------------------- add flow -- */
+
+await page.waitForTimeout(900)
+await page.locator('.node', { hasText: 'Macarons' }).click({ button: 'right', force: true })
+await page.waitForTimeout(300)
+await page.getByRole('menuitem', { name: /Advance/ }).click()
+await page.getByLabel('Name').fill('Italian meringue')
+await page.getByRole('button', { name: 'Create' }).click()
+await page.waitForTimeout(600)
+const added = await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  const node = Object.values(s.graph.nodes).find((n) => n.title === 'Italian meringue')
+  const parent = node && s.graph.nodes[node.primaryParentId]
+  return { depth: node && s.index.depth[node.id], parent: parent?.title, baseColor: node?.baseColor }
+})
+check('right-click to Advance creates a child', added.parent === 'Macarons' && added.depth === 2, JSON.stringify(added))
+check('a new non-root carries no base colour', added.baseColor === null)
+
+/* ------------------------------------------------- re-shade on deepening -- */
+
+const reshade = await page.evaluate(() => {
+  const s = () => window.skillTree.getState()
+  const choux = Object.values(s().graph.nodes).find((n) => n.title === 'Choux')
+  const el = () => [...document.querySelectorAll('.node')].find((n) => n.textContent.includes('Choux'))
+  const before = getComputedStyle(el().querySelector('.node-tile')).backgroundColor
+  const croq = Object.values(s().graph.nodes).find((n) => n.title === 'Croquembouche')
+  s().addNode(croq.id, 'advance', { title: 'Pièce montée' })
+  return { before, choux: choux.id }
+})
+await page.waitForTimeout(700)
+const after = await page.evaluate(() => {
+  const el = [...document.querySelectorAll('.node')].find((n) => n.textContent.includes('Choux'))
+  return getComputedStyle(el.querySelector('.node-tile')).backgroundColor
+})
+check('deepening a chain re-shades its ancestors', after !== reshade.before, `${reshade.before} -> ${after}`)
+
+/* -------------------------------------------------------------- collapse -- */
+
+await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  s.toggleCollapse(s.index.rootIds[0])
+})
+await page.waitForTimeout(900)
+const collapsed = await page.evaluate(() => ({
+  visible: document.querySelectorAll('.node').length,
+  badge: document.querySelector('.node-badge')?.textContent,
+  crossEdges: document.querySelectorAll('.edge').length,
+}))
+check('collapsing hides descendants and shows a count', Number(collapsed.badge) > 0, JSON.stringify(collapsed))
+
+await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  s.toggleCollapse(s.index.rootIds[0])
+})
+await page.waitForTimeout(900)
+const expanded = await page.evaluate(() => document.querySelectorAll('.node').length)
+check('expanding brings them back', expanded > collapsed.visible, `${collapsed.visible} -> ${expanded}`)
+
+/* -------------------------------------------------------------- persist -- */
+
+await page.waitForTimeout(600)
+await page.reload()
+await page.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
+await page.waitForTimeout(500)
+const persisted = await page.evaluate(() => {
+  const s = window.skillTree.getState()
+  return {
+    nodes: s.index.live.length,
+    hasMeringue: s.index.live.some((n) => n.title === 'Italian meringue'),
+  }
+})
+check('the graph survives a reload', persisted.hasMeringue && persisted.nodes > 5, JSON.stringify(persisted))
+
+check('no uncaught errors', errors.length === 0, errors.slice(0, 3).join(' | '))
+
+await browser.close()
+const failed = results.filter((r) => !r.ok)
+console.log(`\n${results.length - failed.length}/${results.length} passed`)
+process.exit(failed.length ? 1 : 0)

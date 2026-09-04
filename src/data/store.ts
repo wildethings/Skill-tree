@@ -5,6 +5,7 @@ import { buildIndex, milestonesOf, validateParents, type GraphIndex } from '../l
 import { defaultBaseColor } from '../lib/color/palette'
 import { backend } from './backend'
 import { createSyncer, type SyncState } from './sync'
+import { mergeGraph } from './merge'
 import type { Row } from './adapter'
 
 type Status = 'loading' | 'signed-out' | 'needs-invite' | 'ready' | 'error'
@@ -58,6 +59,9 @@ type DataStore = {
 }
 
 let syncer: ReturnType<typeof createSyncer> | null = null
+/** init() must be idempotent: a second call would otherwise reload over
+ *  anything written since the first one started. */
+let initInFlight: Promise<void> | null = null
 
 export const useData = create<DataStore>((set, get) => {
   /** Applies a mutation to a cloned graph, reindexes, and queues the changed rows. */
@@ -112,6 +116,30 @@ export const useData = create<DataStore>((set, get) => {
     return { table: 'prefs', data: graph.prefs }
   }
 
+  /** Loads the session and the graph. Guarded by initInFlight; safe to call again. */
+  const runInit = async () => {
+    try {
+      const session = await backend.session()
+      if (session.state === 'signed-out') return set({ status: 'signed-out' })
+      if (session.state === 'needs-invite') return set({ status: 'needs-invite', pendingEmail: session.email })
+
+      const user = session.user
+      syncer ??= createSyncer(backend, (sync) => set({ sync }))
+      syncer.listen()
+      const { graph: cached, fresh } = await syncer.start(user.id)
+      if (cached) set({ status: 'ready', user, graph: cached, index: buildIndex(cached) })
+
+      // Merged rather than assigned: anything written while this load was in
+      // flight is newer than what the load returned, and must survive it.
+      const loaded = await fresh
+      const graph = get().user?.id === user.id ? mergeGraph(get().graph, loaded) : loaded
+      set({ status: 'ready', user, graph, index: buildIndex(graph) })
+      await syncer.flushNow()
+    } catch (e) {
+      set({ status: 'error', error: e instanceof Error ? e.message : 'Something went wrong.' })
+    }
+  }
+
   return {
     status: 'loading',
     user: null,
@@ -122,24 +150,11 @@ export const useData = create<DataStore>((set, get) => {
     error: null,
     undo: null,
 
-    async init() {
-      try {
-        const session = await backend.session()
-        if (session.state === 'signed-out') return set({ status: 'signed-out' })
-        if (session.state === 'needs-invite') return set({ status: 'needs-invite', pendingEmail: session.email })
-
-        const user = session.user
-        syncer = createSyncer(backend, (sync) => set({ sync }))
-        syncer.listen()
-        const { graph: cached, fresh } = await syncer.start(user.id)
-        if (cached) set({ status: 'ready', user, graph: cached, index: buildIndex(cached) })
-        const graph = await fresh
-        // Anything queued locally is newer than what just arrived, so replay it.
-        set({ status: 'ready', user, graph, index: buildIndex(graph) })
-        await syncer.flushNow()
-      } catch (e) {
-        set({ status: 'error', error: e instanceof Error ? e.message : 'Something went wrong.' })
-      }
+    init() {
+      initInFlight ??= runInit().finally(() => {
+        initInFlight = null
+      })
+      return initInFlight
     },
 
     async signIn(email) {
@@ -156,12 +171,14 @@ export const useData = create<DataStore>((set, get) => {
     async signOut() {
       await backend.signOut()
       syncer = null
+      initInFlight = null
       set({ status: 'signed-out', user: null, graph: emptyGraph(''), index: buildIndex(emptyGraph('')) })
     },
 
     async deleteAccount() {
       await backend.deleteAccount()
       syncer = null
+      initInFlight = null
       set({ status: 'signed-out', user: null, graph: emptyGraph(''), index: buildIndex(emptyGraph('')) })
     },
 

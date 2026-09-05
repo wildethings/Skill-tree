@@ -7,6 +7,7 @@ import { liveEntries } from '../lib/graph/graph'
 import { tintMap } from '../lib/color/tint'
 import { formatDayShort, formatMonth, monthKey } from '../lib/date'
 import { Icon } from './Icon'
+import { PhotoThumb } from './PhotoThumb'
 
 type Item = {
   id: string
@@ -131,7 +132,7 @@ export function Timeline() {
                     {item.photoIds.length ? (
                       <span className="thumbs">
                         {item.photoIds.map((id) =>
-                          graph.photos[id] ? <img key={id} src={graph.photos[id].url} alt="" loading="lazy" /> : null,
+                          graph.photos[id] ? <PhotoThumb key={id} photo={graph.photos[id]} /> : null,
                         )}
                       </span>
                     ) : null}

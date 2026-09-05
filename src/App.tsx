@@ -11,6 +11,7 @@ import { AddNode } from './ui/AddNode'
 import { Search } from './ui/Search'
 import { Settings } from './ui/Settings'
 import { Auth } from './ui/Auth'
+import { ImportPrompt } from './ui/ImportPrompt'
 
 export default function App() {
   const status = useData((s) => s.status)
@@ -70,6 +71,7 @@ export default function App() {
       {ui.adding ? <AddNode intent={ui.adding} /> : null}
       {ui.searchOpen ? <Search /> : null}
       {ui.settingsOpen ? <Settings /> : null}
+      <ImportPrompt />
       {ui.linkingFrom ? <LinkingBar /> : null}
       <Toast />
       <SyncBadge />

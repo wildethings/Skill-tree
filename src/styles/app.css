@@ -1276,3 +1276,37 @@ kbd {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
+
+.import-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-field);
+  background: var(--surface-2);
+}
+
+.import-summary div { display: flex; flex-direction: column; gap: 2px; }
+.import-summary strong { font-size: var(--t-13); font-weight: 500; }
+.import-summary em { font-style: normal; font-size: var(--t-11); color: var(--text-faint); }
+
+.import-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--r-tile);
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+/* Holds a thumbnail's space while its signed URL is being fetched. */
+.thumb-pending {
+  display: block;
+  width: 62px;
+  height: 62px;
+  border-radius: 11px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-soft);
+}

@@ -6,6 +6,7 @@ import { defaultBaseColor } from '../lib/color/palette'
 import { backend } from './backend'
 import { createSyncer, type SyncState } from './sync'
 import { mergeGraph } from './merge'
+import { findLocalGraph, markImported, rowsForImport, type LocalSnapshot } from './importLocal'
 import type { Row } from './adapter'
 
 type Status = 'loading' | 'signed-out' | 'needs-invite' | 'ready' | 'error'
@@ -22,6 +23,9 @@ type DataStore = {
   sync: SyncState
   error: string | null
   undo: Undo | null
+  /** A local-mode graph found on this device, offered for upload. */
+  pendingImport: LocalSnapshot | null
+  importing: boolean
 
   init: () => Promise<void>
   signIn: (email: string) => Promise<string>
@@ -56,6 +60,9 @@ type DataStore = {
 
   applyUndo: () => void
   clearUndo: () => void
+
+  importLocalGraph: () => Promise<{ ok: boolean; message: string }>
+  dismissImport: () => void
 }
 
 let syncer: ReturnType<typeof createSyncer> | null = null
@@ -135,6 +142,12 @@ export const useData = create<DataStore>((set, get) => {
       const graph = get().user?.id === user.id ? mergeGraph(get().graph, loaded) : loaded
       set({ status: 'ready', user, graph, index: buildIndex(graph) })
       await syncer.flushNow()
+
+      // Only in backend mode: a graph built before this device had an account
+      // would otherwise vanish behind the sign-in screen.
+      if (backend.kind !== 'local') {
+        set({ pendingImport: await findLocalGraph(user.id) })
+      }
     } catch (e) {
       set({ status: 'error', error: e instanceof Error ? e.message : 'Something went wrong.' })
     }
@@ -149,6 +162,8 @@ export const useData = create<DataStore>((set, get) => {
     sync: { pending: 0, online: true, error: null },
     error: null,
     undo: null,
+    pendingImport: null,
+    importing: false,
 
     init() {
       initInFlight ??= runInit().finally(() => {
@@ -495,5 +510,39 @@ export const useData = create<DataStore>((set, get) => {
     },
 
     clearUndo: () => set({ undo: null }),
+
+    /* ----------------------------------------------------------- import -- */
+
+    /**
+     * Uploads the device's local graph to the signed-in account. The push is
+     * awaited rather than queued, so this reports what actually happened: the
+     * device copy is only marked imported once the server has taken the rows,
+     * and is never deleted either way.
+     */
+    async importLocalGraph() {
+      const snapshot = get().pendingImport
+      const user = get().user
+      if (!snapshot || !user) return { ok: false, message: 'Nothing to import.' }
+
+      set({ importing: true })
+      try {
+        const { rows, graph: imported } = rowsForImport(snapshot, user)
+        await backend.push(user.id, rows)
+
+        // Confirmed. Fold it into what is already on screen and remember.
+        const merged = mergeGraph(imported, get().graph)
+        await markImported(snapshot.localUserId, user.id)
+        set({ graph: merged, index: buildIndex(merged), pendingImport: null, importing: false })
+        return { ok: true, message: `Uploaded ${snapshot.nodes} nodes to your account.` }
+      } catch (e) {
+        set({ importing: false })
+        return {
+          ok: false,
+          message: e instanceof Error ? e.message : 'The upload did not go through. Nothing on this device was changed.',
+        }
+      }
+    },
+
+    dismissImport: () => set({ pendingImport: null }),
   }
 })

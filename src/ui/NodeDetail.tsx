@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { Photo } from '../types'
 import { useData } from '../data/store'
 import { useUI } from './uiStore'
 import { useTheme } from './useTheme'
@@ -11,6 +12,7 @@ import { formatDay } from '../lib/date'
 import { Icon } from './Icon'
 import { IconPickerPanel } from './IconPickerLazy'
 import { Sheet } from './Sheet'
+import { PhotoThumb } from './PhotoThumb'
 
 export function NodeDetail({ nodeId }: { nodeId: string }) {
   const graph = useData((s) => s.graph)
@@ -266,7 +268,7 @@ function EntryRow({ entryId }: { entryId: string }) {
         <div className="thumbs">
           {entry.photoIds.map((id) => {
             const photo = photos[id]
-            return photo ? <img key={id} src={photo.url} alt="" loading="lazy" width={photo.width} height={photo.height} /> : null
+            return photo ? <PhotoThumb key={id} photo={photo} /> : null
           })}
         </div>
       ) : null}
@@ -283,7 +285,7 @@ function LogEntryForm({ nodeId, onClose }: { nodeId: string; onClose: () => void
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState('')
-  const [pending, setPending] = useState<Array<{ id: string; url: string }>>([])
+  const [pending, setPending] = useState<Photo[]>([])
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -295,7 +297,7 @@ function LogEntryForm({ nodeId, onClose }: { nodeId: string; onClose: () => void
         const upload = await prepareUpload(file, backend.kind === 'supabase')
         const photo = await backend.uploadPhoto(user.id, upload)
         addPhoto(photo)
-        setPending((p) => [...p, { id: photo.id, url: photo.url }])
+        setPending((p) => [...p, photo])
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'That image could not be added.')
@@ -344,7 +346,7 @@ function LogEntryForm({ nodeId, onClose }: { nodeId: string; onClose: () => void
 
       <div className="thumbs">
         {pending.map((p) => (
-          <img key={p.id} src={p.url} alt="" />
+          <PhotoThumb key={p.id} photo={p} />
         ))}
       </div>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />

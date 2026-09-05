@@ -283,8 +283,10 @@ check('the graph survives a reload', persisted.hasMeringue && persisted.nodes > 
 
 /* ------------------------------------------------------------- export -- */
 
-const exported = await page.evaluate(async () => {
-  const { buildExport } = await import('/src/data/export.ts')
+// Resolved against BASE_URL: the app is served from a subpath on Pages, so a
+// root-absolute module specifier would not exist.
+const exported = await page.evaluate(async (moduleUrl) => {
+  const { buildExport } = await import(moduleUrl)
   const s = window.skillTree.getState()
   const file = buildExport(s.graph, s.user)
   const round = JSON.parse(JSON.stringify(file))
@@ -296,7 +298,7 @@ const exported = await page.evaluate(async () => {
     hasPrefs: Boolean(round.preferences),
     hasEntries: Array.isArray(round.entries),
   }
-})
+}, new URL('src/data/export.ts', BASE_URL).href)
 check(
   'export is complete and round-trips as JSON',
   exported.format === 'skill-tree/v1' && exported.nodes > 0 && exported.hasPrefs && exported.hasEntries && exported.includesDeleted,

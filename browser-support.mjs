@@ -26,7 +26,7 @@ export const launchOptions = () => {
   return executablePath ? { executablePath } : {}
 }
 
-export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5173'
+export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5173/Skill-tree/'
 
 /** Waits for the dev server rather than assuming the caller sequenced things. */
 export async function waitForServer(url = BASE_URL, timeoutMs = 90_000) {

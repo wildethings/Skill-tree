@@ -15,6 +15,11 @@ npm install
 npm run dev
 ```
 
+Then open **http://localhost:5173/Skill-tree/** — the app is served from a
+subpath because that is where GitHub Pages puts it, and dev matches so the
+browser checks exercise the real base path. Override it with `BASE_PATH` if you
+fork under a different name.
+
 That is enough. With no backend configured the app runs in **local mode** — the
 same features, with the graph in IndexedDB on that one device and no account.
 
@@ -36,7 +41,8 @@ npm run test:perf     # frame timing at the design target: 8 roots, 80 nodes
 ```
 
 CI runs the typecheck, unit tests, build and browser checks on every pull
-request (`.github/workflows/ci.yml`). Frame timing is left out of CI on
+request (`.github/workflows/ci.yml`), and `pages.yml` deploys the built app to
+GitHub Pages on pushes to `main` (or on demand via *Run workflow*). Frame timing is left out of CI on
 purpose — a shared runner with no GPU cannot hold a meaningful threshold — so
 `test:perf` is a local tool.
 

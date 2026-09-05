@@ -4,20 +4,21 @@
  * Run with the dev server up:  npm run dev &  node browser-test.mjs
  */
 import { chromium } from 'playwright'
+import { BASE_URL, launchOptions, waitForServer } from './browser-support.mjs'
 
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 const results = []
 const check = (name, ok, detail = '') => {
   results.push({ name, ok, detail })
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
 }
 
-const browser = await chromium.launch({ executablePath: CHROME })
+await waitForServer()
+const browser = await chromium.launch(launchOptions())
 const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 
-await page.goto('http://localhost:5173/')
+await page.goto(BASE_URL)
 await page.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
 
 await page.evaluate(() => {
@@ -365,7 +366,7 @@ check(
 /* --------------------------------------------------- reduced motion -- */
 
 const reduced = await browser.newPage({ viewport: { width: 1280, height: 820 }, reducedMotion: 'reduce' })
-await reduced.goto('http://localhost:5173/')
+await reduced.goto(BASE_URL)
 await reduced.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
 await reduced.evaluate(() => {
   const s = () => window.skillTree.getState()

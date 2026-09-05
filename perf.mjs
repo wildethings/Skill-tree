@@ -1,8 +1,10 @@
 import { chromium } from 'playwright'
+import { BASE_URL, launchOptions, waitForServer } from './browser-support.mjs'
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
+await waitForServer()
+const browser = await chromium.launch(launchOptions())
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-await page.goto('http://localhost:5173/')
+await page.goto(BASE_URL)
 await page.waitForFunction(() => window.skillTree?.getState().status === 'ready', { timeout: 20000 })
 
 // The spec's design target: roughly 8 roots and 60+ nodes.

@@ -35,6 +35,14 @@ npm run test:browser  # 31 runtime checks (needs `npm run dev` running)
 npm run test:perf     # frame timing at the design target: 8 roots, 80 nodes
 ```
 
+CI runs the typecheck, unit tests, build and browser checks on every pull
+request (`.github/workflows/ci.yml`). Frame timing is left out of CI on
+purpose — a shared runner with no GPU cannot hold a meaningful threshold — so
+`test:perf` is a local tool.
+
+The icon sprite and its search catalog are generated rather than committed, so
+`dev`, `build` and `typecheck` all build them first. Nothing else needs to know.
+
 ## How it fits together
 
 ```

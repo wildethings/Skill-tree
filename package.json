@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "npm run icons && vite",
-    "build": "npm run icons && tsc -b && vite build",
+    "build": "npm run icons && tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false --pretty",
+    "typecheck": "npm run icons && tsc --noEmit -p tsconfig.json",
     "icons": "node scripts/build-icon-sprite.mjs",
     "test": "node scripts/run-tests.mjs",
     "test:browser": "node browser-test.mjs",
@@ -28,6 +28,7 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
+    "playwright": "^1.62.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
   }

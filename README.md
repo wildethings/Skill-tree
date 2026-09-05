@@ -42,7 +42,23 @@ npm run test:perf     # frame timing at the design target: 8 roots, 80 nodes
 
 CI runs the typecheck, unit tests, build and browser checks on every pull
 request (`.github/workflows/ci.yml`), and `pages.yml` deploys the built app to
-GitHub Pages on pushes to `main` (or on demand via *Run workflow*). Frame timing is left out of CI on
+GitHub Pages on pushes to `main`.
+
+Two settings have to be right or the site serves the wrong thing:
+
+- **Settings → Pages → Source must be "GitHub Actions."** Left on "Deploy from
+  a branch", GitHub's built-in builder publishes the repository root instead —
+  which serves the source `index.html`, whose `/src/main.tsx` the browser
+  cannot execute, so the page loads blank while every workflow reports success.
+- **`pages.yml` must be on the default branch.** `workflow_dispatch` only
+  offers a workflow that exists on the default branch, so it cannot be run by
+  hand from a feature branch.
+
+`scripts/verify-deploy.mjs` guards both: the workflow runs it once against
+`dist/index.html` before publishing, and again against the live URL afterwards,
+asserting the page loads a hashed asset under the base path rather than
+`/src/main.tsx`. Run it by hand against any deployment with
+`node scripts/verify-deploy.mjs <url>`. Frame timing is left out of CI on
 purpose — a shared runner with no GPU cannot hold a meaningful threshold — so
 `test:perf` is a local tool.
 

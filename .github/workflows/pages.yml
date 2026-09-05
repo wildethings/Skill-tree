@@ -47,10 +47,22 @@ jobs:
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
 
+      # Never publish the source page. Catches a build that silently did not
+      # produce dist, before anything ships.
+      - name: Verify the artifact is the build
+        run: node scripts/verify-deploy.mjs dist/index.html --base /${{ github.event.repository.name }}/
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: ./dist
 
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # And check what is actually being served. A correct artifact is not
+      # enough: if the Pages source is still "Deploy from a branch", GitHub's
+      # built-in builder publishes the repository root over the top of this and
+      # the site serves the unbuilt index.html while every job here goes green.
+      - name: Verify the deployed site
+        run: node scripts/verify-deploy.mjs "${{ steps.deploy.outputs.page_url }}"

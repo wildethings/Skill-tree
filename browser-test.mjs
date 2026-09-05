@@ -394,6 +394,35 @@ check('reduced motion lays nodes out instantly, at full scale', rmState.laidOut 
 check('reduced motion disables the cursor push', rmState.before === rmState.during, `${rmState.before} vs ${rmState.during}`)
 await reduced.close()
 
+/* ------------------------------------------------- local mode and fonts -- */
+
+const localMode = await page.evaluate(() => ({
+  // With no Supabase env vars the app must run entirely on the device.
+  hasUser: Boolean(window.skillTree.getState().user),
+  email: window.skillTree.getState().user?.email,
+  status: window.skillTree.getState().status,
+  // The import offer belongs to backend mode only.
+  importPrompt: window.skillTree.getState().pendingImport,
+  fontFamily: getComputedStyle(document.body).fontFamily.split(',')[0].replace(/['"]/g, ''),
+}))
+check(
+  'no env vars means local mode, no account needed',
+  localMode.status === 'ready' && localMode.hasUser && localMode.email === 'local@device',
+  JSON.stringify(localMode),
+)
+check('the local-graph import offer stays out of local mode', localMode.importPrompt === null)
+check('the page uses the self-hosted family', localMode.fontFamily === 'Hanken Grotesk', localMode.fontFamily)
+
+const fontRequests = await page.evaluate(() =>
+  performance.getEntriesByType('resource').filter((r) => /googleapis|gstatic/.test(r.name)).map((r) => r.name),
+)
+check('nothing is fetched from Google Fonts', fontRequests.length === 0, fontRequests.join(', '))
+
+const fontFiles = await page.evaluate(() =>
+  performance.getEntriesByType('resource').filter((r) => /\.woff2?($|\?)/.test(r.name)).length,
+)
+check('the font is served from this origin', fontFiles > 0, `${fontFiles} font files`)
+
 check('no uncaught errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 
 await browser.close()

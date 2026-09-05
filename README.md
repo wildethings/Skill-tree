@@ -35,8 +35,8 @@ registration, row-level security and the photo bucket. See
 
 ```sh
 npm run build         # typecheck + production build
-npm test              # 57 unit tests: graph rules, tint ramp, layout, store, merge
-npm run test:browser  # 31 runtime checks (needs `npm run dev` running)
+npm test              # 64 unit tests: graph rules, tint ramp, layout, store, merge, import
+npm run test:browser  # 36 runtime checks (needs `npm run dev` running)
 npm run test:perf     # frame timing at the design target: 8 roots, 80 nodes
 ```
 
@@ -121,7 +121,16 @@ exporting `stat: StatModule` and the grid picks it up. Do not edit a layout.
 **Isolation is enforced in the database.** Every row carries `user_id`, every
 policy checks it against `auth.uid()`, and every policy also requires a profile
 row — so an account that authenticated but never redeemed an invite can read
-and write nothing.
+and write nothing. The app filters by `user_id` too, which means the interface
+would look correct even with the policies wide open — so the checks in
+`supabase/test/` bypass it and assert what the database itself returns. See
+[`supabase/README.md`](supabase/README.md).
+
+**A graph built in local mode is not stranded by signing in.** When backend
+credentials appear, the app looks for a device-local graph and offers to upload
+it. The push is awaited rather than queued, the device copy is never deleted —
+before or after — and row ids carry across, so an import adds to an account
+rather than replacing it.
 
 Design and interaction calls, including the decisions the spec left open, are
 in [`docs/DECISIONS.md`](docs/DECISIONS.md).

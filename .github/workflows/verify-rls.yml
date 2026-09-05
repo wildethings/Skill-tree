@@ -1,0 +1,39 @@
+name: Verify RLS
+
+# Run by hand against the live project. Kept out of CI on purpose: it talks to
+# a real database, and a pull request should not need those credentials.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rest:
+    name: REST-layer isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      # The anonymous probe needs only the two secrets and catches the
+      # catastrophic case. The cross-account leg additionally needs two test
+      # accounts; without them it reports itself skipped rather than passing.
+      - name: Query the REST endpoint directly
+        run: node scripts/verify-rls-rest.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          TEST_A_EMAIL: ${{ secrets.RLS_TEST_A_EMAIL }}
+          TEST_A_PASSWORD: ${{ secrets.RLS_TEST_A_PASSWORD }}
+          TEST_A_INVITE: ${{ secrets.RLS_TEST_A_INVITE }}
+          TEST_B_EMAIL: ${{ secrets.RLS_TEST_B_EMAIL }}
+          TEST_B_PASSWORD: ${{ secrets.RLS_TEST_B_PASSWORD }}
+          TEST_B_INVITE: ${{ secrets.RLS_TEST_B_INVITE }}

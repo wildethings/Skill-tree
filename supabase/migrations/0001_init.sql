@@ -206,6 +206,20 @@ insert into storage.buckets (id, name, public)
 values ('photos', 'photos', true)
 on conflict (id) do nothing;
 
+-- Supabase enables RLS on storage.objects by default, but policies on a table
+-- without RLS are inert, so never assume it: the whole photo isolation boundary
+-- rests on this being on.
+do $$
+begin
+  if not coalesce((select rowsecurity from pg_tables where schemaname = 'storage' and tablename = 'objects'), false) then
+    begin
+      execute 'alter table storage.objects enable row level security';
+    exception when insufficient_privilege then
+      raise warning 'Could not enable RLS on storage.objects. Turn it on under Storage -> Policies before uploading anything.';
+    end;
+  end if;
+end $$;
+
 -- Photos live under <user id>/..., so the path prefix is the isolation boundary.
 drop policy if exists photos_own_write on storage.objects;
 create policy photos_own_write on storage.objects for all to authenticated

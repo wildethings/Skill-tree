@@ -214,6 +214,10 @@ export function createSupabaseBackend(): Backend {
       if (error) throw new Error(error.message)
     },
 
+    /**
+     * Stores the object path rather than a URL. The bucket is private, so there
+     * is no durable URL to keep — reads are signed on demand and expire.
+     */
     async uploadPhoto(userId, upload: PhotoUpload) {
       const id = newId()
       const put = async (blob: Blob, suffix: string) => {
@@ -223,11 +227,22 @@ export function createSupabaseBackend(): Backend {
           cacheControl: '31536000',
         })
         if (error) throw new Error(error.message)
-        return client.storage.from('photos').getPublicUrl(path).data.publicUrl
+        return path
       }
       const url = await put(upload.thumb, 'thumb')
       const fullUrl = upload.full ? await put(upload.full, 'full') : null
       return { id, userId, url, fullUrl, width: upload.width, height: upload.height, createdAt: now() }
+    },
+
+    async signPhotoUrls(paths, expiresIn) {
+      if (paths.length === 0) return {}
+      const { data, error } = await client.storage.from('photos').createSignedUrls(paths, expiresIn)
+      if (error) throw new Error(error.message)
+      const out: Record<string, string> = {}
+      for (const row of data ?? []) {
+        if (row.signedUrl && row.path) out[row.path] = row.signedUrl
+      }
+      return out
     },
   }
 }

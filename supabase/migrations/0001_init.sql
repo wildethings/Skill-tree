@@ -202,9 +202,13 @@ grant execute on function public.create_invite(integer) to authenticated;
 grant execute on function public.delete_account() to authenticated;
 
 -- ----------------------------------------------------------------- storage --
+-- Private. A thumbnail URL is not access control: a public bucket hands the
+-- image to anyone who has the link, and links leak. Reads go through
+-- short-lived signed URLs instead. The update clause matters — a project that
+-- already created this bucket as public is switched over rather than skipped.
 insert into storage.buckets (id, name, public)
-values ('photos', 'photos', true)
-on conflict (id) do nothing;
+values ('photos', 'photos', false)
+on conflict (id) do update set public = false;
 
 -- Supabase enables RLS on storage.objects by default, but policies on a table
 -- without RLS are inert, so never assume it: the whole photo isolation boundary
@@ -226,9 +230,10 @@ create policy photos_own_write on storage.objects for all to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text)
   with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
+-- Removed deliberately: this previously granted select on the whole bucket to
+-- anyone. photos_own_write is `for all`, so it already covers reads, confined
+-- to the account's own prefix.
 drop policy if exists photos_public_read on storage.objects;
-create policy photos_public_read on storage.objects for select to public
-  using (bucket_id = 'photos');
 
 -- -------------------------------------------------------------------- sync --
 -- Last-write-wins per record, resolved on the server so a stale client (or a

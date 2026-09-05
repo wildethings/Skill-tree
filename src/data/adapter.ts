@@ -35,6 +35,12 @@ export interface Backend {
   deleteAccount(): Promise<void>
   createInvites(count: number): Promise<string[]>
 
+  /**
+   * Short-lived read URLs for stored photo paths. The bucket is private, so a
+   * stored reference is a path, not something an <img> can load.
+   */
+  signPhotoUrls(paths: string[], expiresIn: number): Promise<Record<string, string>>
+
   load(userId: string): Promise<Graph>
   push(userId: string, rows: Row[]): Promise<void>
   uploadPhoto(userId: string, upload: PhotoUpload): Promise<Photo>

@@ -1300,3 +1300,13 @@ kbd {
   background: var(--surface-3);
   color: var(--text-dim);
 }
+
+/* Holds a thumbnail's space while its signed URL is being fetched. */
+.thumb-pending {
+  display: block;
+  width: 62px;
+  height: 62px;
+  border-radius: 11px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-soft);
+}

@@ -132,6 +132,19 @@ begin
   raise notice 'ok   A can write into its own storage folder';
 end $$;
 
+-- ------------------------------- 4b. photo reads are not public either ----
+set request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111"}';
+do $$
+declare n int;
+begin
+  select count(*) into n from storage.objects where name like '22222222%';
+  if n <> 0 then raise exception 'LEAK: A read % of B''s storage objects', n; end if;
+  if (select public from storage.buckets where id = 'photos') then
+    raise exception 'the photos bucket is public — a thumbnail URL would be readable by anyone';
+  end if;
+  raise notice 'ok   the photos bucket is private and B''s objects are not listable by A';
+end $$;
+
 -- ----------------------- 5. an authenticated non-member can write nothing --
 set request.jwt.claims = '{"sub":"33333333-3333-3333-3333-333333333333"}';
 do $$

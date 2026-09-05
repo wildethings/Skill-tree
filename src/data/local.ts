@@ -69,6 +69,11 @@ export function createLocalBackend(): Backend {
       return []
     },
 
+    async signPhotoUrls(paths) {
+      // Local photos are inlined data URLs; there is nothing to sign.
+      return Object.fromEntries(paths.map((p) => [p, p]))
+    },
+
     async load(userId) {
       return structuredClone(await read(userId))
     },

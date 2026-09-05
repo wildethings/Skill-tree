@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.local
+*.tsbuildinfo
+public/icons/ph-duotone.svg
+src/lib/icons/catalog.generated.ts

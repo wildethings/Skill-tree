@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes whatever was already running for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The icon sprite and its search catalog are generated, not committed, so
+      # every script that reads them builds them first (see package.json).
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - run: npm run build
+
+  browser:
+    name: Browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The checks drive the real app and need the dev-only store handle, so
+      # they run against `npm run dev` rather than a preview of the build.
+      - name: Start the dev server
+        run: npm run dev > /tmp/vite.log 2>&1 &
+
+      # browser-test.mjs waits for the server itself, so there is no sleep here.
+      - name: Browser checks
+        run: npm run test:browser
+
+      - name: Dev server log
+        if: failure()
+        run: cat /tmp/vite.log
+
+# Frame timing (npm run test:perf) is deliberately not gated here: a shared
+# runner with no GPU cannot hold a meaningful threshold. Run it locally.

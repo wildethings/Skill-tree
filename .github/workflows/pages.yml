@@ -1,0 +1,68 @@
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets the site be deployed from a branch before it is merged.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a queued run waits rather than racing a live one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      # Cheap insurance: never publish a build that does not typecheck or pass
+      # its unit tests, even when triggered by hand.
+      - run: npm run typecheck
+      - run: npm test
+
+      # The base path must match the repository name, or every asset 404s.
+      - name: Build
+        run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+
+      # Never publish the source page. Catches a build that silently did not
+      # produce dist, before anything ships.
+      - name: Verify the artifact is the build
+        run: node scripts/verify-deploy.mjs dist/index.html --base /${{ github.event.repository.name }}/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      # And check what is actually being served. A correct artifact is not
+      # enough: if the Pages source is still "Deploy from a branch", GitHub's
+      # built-in builder publishes the repository root over the top of this and
+      # the site serves the unbuilt index.html while every job here goes green.
+      - name: Verify the deployed site
+        run: node scripts/verify-deploy.mjs "${{ steps.deploy.outputs.page_url }}"

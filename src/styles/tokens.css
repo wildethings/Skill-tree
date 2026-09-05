@@ -1,0 +1,69 @@
+/*
+  One family, two weights, a fixed scale. The branch tints are the only colour
+  in the interface — every token below is neutral, so a canvas full of
+  user-chosen colours has somewhere quiet to sit.
+*/
+:root {
+  --font: 'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --t-11: 0.6875rem;
+  --t-12: 0.75rem;
+  --t-13: 0.8125rem;
+  --t-15: 0.9375rem;
+  --t-18: 1.125rem;
+  --t-22: 1.375rem;
+  --t-28: 1.75rem;
+
+  /* Generous radii are the main carrier of the cute quality. Keep them consistent. */
+  --r-tile: 16px;
+  --r-node: 16px;
+  --r-panel: 20px;
+  --r-field: 12px;
+  --r-pill: 999px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* A light, quiet neutral with a faint cool cast, so branch colours sit forward. */
+  --canvas: oklch(0.964 0.006 252);
+  --surface: oklch(0.995 0.002 252);
+  --surface-2: oklch(0.978 0.004 252);
+  --surface-3: oklch(0.955 0.005 252);
+  --line: oklch(0.906 0.007 252);
+  --line-soft: oklch(0.938 0.005 252);
+  --text: oklch(0.29 0.014 265);
+  --text-dim: oklch(0.52 0.011 265);
+  --text-faint: oklch(0.665 0.009 265);
+  --focus: oklch(0.55 0.02 258);
+
+  --shadow-1: 0 1px 2px oklch(0.29 0.014 265 / 0.05), 0 1px 1px oklch(0.29 0.014 265 / 0.04);
+  --shadow-2: 0 4px 14px oklch(0.29 0.014 265 / 0.08), 0 1px 3px oklch(0.29 0.014 265 / 0.05);
+  --shadow-3: 0 18px 48px oklch(0.29 0.014 265 / 0.16), 0 2px 8px oklch(0.29 0.014 265 / 0.07);
+
+  --scrim: oklch(0.29 0.014 265 / 0.28);
+  --dim-opacity: 0.15;
+}
+
+:root[data-theme='dark'] {
+  --canvas: oklch(0.208 0.009 265);
+  --surface: oklch(0.248 0.011 265);
+  --surface-2: oklch(0.266 0.012 265);
+  --surface-3: oklch(0.302 0.013 265);
+  --line: oklch(0.328 0.013 265);
+  --line-soft: oklch(0.284 0.012 265);
+  --text: oklch(0.945 0.005 265);
+  --text-dim: oklch(0.735 0.010 265);
+  --text-faint: oklch(0.588 0.011 265);
+  --focus: oklch(0.78 0.03 258);
+
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-2: 0 4px 14px oklch(0 0 0 / 0.36), 0 1px 3px oklch(0 0 0 / 0.24);
+  --shadow-3: 0 18px 48px oklch(0 0 0 / 0.5), 0 2px 8px oklch(0 0 0 / 0.3);
+
+  --scrim: oklch(0.12 0.01 265 / 0.55);
+  --dim-opacity: 0.16;
+}

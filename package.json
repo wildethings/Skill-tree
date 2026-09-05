@@ -1,0 +1,35 @@
+{
+  "name": "skill-tree",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run icons && vite",
+    "build": "npm run icons && tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "npm run icons && tsc --noEmit -p tsconfig.json",
+    "icons": "node scripts/build-icon-sprite.mjs",
+    "test": "node scripts/run-tests.mjs",
+    "test:browser": "node browser-test.mjs",
+    "test:perf": "node perf.mjs"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "@supabase/supabase-js": "^2.45.4",
+    "culori": "^4.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@types/culori": "^2.1.1",
+    "@types/node": "^26.4.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "playwright": "^1.62.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}
